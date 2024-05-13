@@ -3,7 +3,7 @@ import AppError from "../middlewares/appError";
 import { STATUS } from "../configs/status";
 import { categoryCollection } from "../models/categoryCollection";
 import { noteCollection } from "../models/noteCollection";
-import { CreateNote, EditNote } from "../types/noteInterface";
+import { CreateNote, EditNote, NoteQuery } from "../types/noteInterface";
 import { User } from "../types/userInterface";
 
 
@@ -24,16 +24,23 @@ export  async function createNote(req:Request,res:Response):Promise<Response>{
     const userId = (req as User).userId;
     const obj:CreateNote = req.body;
     await noteCollection.create({...obj,userId})
-    return  res.status(200).json({status:STATUS.SUCCESS,message:'New note has been created successfully.'})   
+    return  res.status(201).json({status:STATUS.SUCCESS,message:'New note has been created successfully.'})   
  }
 //--------------------------------------------------------------------GET NOTE-------------------------------------------------------------
  export  async function getNotes(req:Request,res:Response):Promise<Response>{
+     const pageNum = +(req.query.page || 1);
     const userId= (req as User).userId;
-    const pageNum = +(req.query.page || 1);
-    const data = await noteCollection.find({userId,isDeleted:false,isCompleted:false}).populate({
+    const query:NoteQuery = {userId,isDeleted:false,isCompleted:false}
+    if(req.query.category){
+        query.categoryId = req.query.category as string;
+    }
+    if(req.query.completed === 'true'){
+        query.isCompleted = true;
+    }
+    const data = await noteCollection.find(query).populate({
         path:"categoryId",
         select:"id name",
-    }).select("-isDeleted -isCompleted -__v")
+    }).select("-isDeleted  -__v")
     .skip((pageNum - 1) * 9)
     .limit(9);
     return  res.status(200).json({status:STATUS.SUCCESS,message:'Note Retrieved Successfully.',data})   
@@ -61,6 +68,20 @@ export  async function markNoteCompleted(req:Request,res:Response):Promise<Respo
     await noteCollection.findByIdAndUpdate(id,{isCompleted:true});
     return  res.status(200).json({status:STATUS.SUCCESS,message:'Successfully marked note as completed.'})   
  }
+
+
+//----------------------------------------------------------------MOVE COMPLETED NOTE TO UNCOMPLETED--------------------------------------------------------
+export  async function markNoteUncompleted(req:Request,res:Response):Promise<Response>{
+    const id =req.params.noteId;
+    await noteCollection.findByIdAndUpdate(id,{isCompleted:false});
+    return  res.status(200).json({status:STATUS.SUCCESS,message:'Successfully moved not to uncompleted.'})   
+ }
+
+
+
+
+
+
 //----------------------------------------------------------------GET COMPLETED NOTES--------------------------------------------------------
 export  async function getAllCompletedNotes(req:Request,res:Response):Promise<Response>{
     const userId = (req as User).userId;

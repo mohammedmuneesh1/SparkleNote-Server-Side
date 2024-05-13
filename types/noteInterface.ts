@@ -20,3 +20,10 @@ export interface EditNote{
     content?:string,
     category?:string,
 }
+
+export interface NoteQuery {
+    userId:string,
+    categoryId?:string,
+        isCompleted?:boolean,
+        isDeleted?:boolean,
+}

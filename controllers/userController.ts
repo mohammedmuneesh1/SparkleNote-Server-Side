@@ -12,6 +12,7 @@ import {
   tokenData,
 } from "../types/userInterface";
 import jwt from "jsonwebtoken";
+import { GetToken, TokenModel } from "../types/tokenInterface";
 
 //-----------------------------------------USER REGISTRATION---------------------------------------------------------------
 export async function userRegistration(
@@ -23,7 +24,7 @@ export async function userRegistration(
     .findOne({ email: obj.email })
     .select("email -_id");
   if (isUserAlreadyExist) {
-    throw new AppError(409, "user alreadyregistered with this email");
+    throw new AppError(409, "user already registered with this email.x");
   }
   const salt = await bcrypt.genSalt(10);
   obj.password = await bcrypt.hash(obj.password, salt);
@@ -48,26 +49,24 @@ export async function userLogin(
   res: Response
 ): Promise<Response> {
   const { email, password } = req.body;
-  const user: LoginData | null = await userCollection
-    .findOne({ email })
-    .select("-__v -updatedAt -createdAt");
+  const user: LoginData | null = await userCollection.findOne({ email }) .select("-__v -updatedAt -createdAt");
   if (!user || !(await bcrypt.compare(password, user.password))) {
     throw new AppError(404, "Email/Password is Invalid");
   }
   if (!user.isVerified) {
-    const tokenInfo =
-      (await tokenCollection.findOne({ userId: user._id })) ||
-      (await tokenCollection.create({
-        userId: user._id,
-        token: crypto.randomBytes(32).toString("hex"),
-      }));
-    const url = `${process.env.APP_URL}/user/${user._id}/account/${tokenInfo.token}/verify`;
-    await sendMail(user.name, user.email, url);
-    return res.status(201).json({
-      status: "Success",
-      message:
-        "Verification Mail has been sent to your account. Please verify your account",
-    });
+    const token: GetToken | null= await tokenCollection.findOne({ userId: user._id }).select("-__v -updatedAt");
+    if(token){
+     await tokenCollection.deleteMany({ userId:user._id});
+      const tokenInfo = await tokenCollection.create({  userId: user._id,token: crypto.randomBytes(32).toString("hex")});
+      const url = `${process.env.APP_URL}/user/${user._id}/account/${tokenInfo.token}/verify`;
+      await sendMail(user.name, user.email, url);
+      return res.status(201).json({
+        status: "Success",
+        message:
+          "Verification Mail has been sent to your account. Please verify your account",
+      });
+    }    
+   
   }
   const token = jwt.sign(
     { userId: user._id },
@@ -86,31 +85,28 @@ export async function userVerification(
   req: Request,
   res: Response
 ): Promise<Response> {
-  const { userId, token } = req.params;
-  const validate: tokenData | null = await tokenCollection.findOne({
-    _id: token,
-    userId,
-  });
+
+  const userId = req.params.userId;
+  const token = req.params.token;
+  const validate:tokenData | null= await tokenCollection.findOne({token});
   if (validate) {
-    const timeDifference =
-      (new Date().getTime() - new Date(validate.createdAt).getTime()) /
-      (1000 * 60);
+    const timeDifference = (new Date().getTime() - new Date(validate.createdAt).getTime()) /(1000 * 60)
     if (timeDifference > 10) {
-      await tokenCollection.deleteOne({ _id: token, userId });
       throw new AppError(
         410,
         "This link has been expired.login again for verification email."
       );
     }
+    }
     await userCollection.findByIdAndUpdate(userId, { isVerified: true });
-    await tokenCollection.deleteOne({ _id: token, userId });
+    await tokenCollection.deleteOne({ userId , token });
     return res.status(200).json({
       status: "Success",
       messsage: "Verification has been Successfull",
     });
-  }
   throw new AppError(400, "Invalid URL. try again");
 }
+
 
 // //==========================================USER VERIFICATION==============================================================
 // async function userVerify(req, res) {

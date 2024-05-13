@@ -35,5 +35,5 @@ export interface tokenData {
   userId: Schema.Types.ObjectId;
   token: string;
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt?: Date;
 }
