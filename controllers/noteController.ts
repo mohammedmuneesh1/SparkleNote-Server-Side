@@ -37,6 +37,7 @@ export  async function createNote(req:Request,res:Response):Promise<Response>{
     if(req.query.completed === 'true'){
         query.isCompleted = true;
     }
+    
     const data = await noteCollection.find(query).populate({
         path:"categoryId",
         select:"id name",
